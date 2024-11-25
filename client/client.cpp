@@ -41,13 +41,13 @@ void menu(FILE *fp, int sockfd)
 	clr_scr();
 	// FUNCTION init
 	string sendline, recvline, student, cliip, outmsg;
-	string dash = "===========================\n";
-	string Console = "Console -> ";
-	string Menu = dash + "MENU\n- login\n- register\n- exit\n";
-	string Lobby = dash + "LOBBY\n- logout\n- exit\n";
-	string Register = dash + "Register\n- back\n- <username> <password>\n- exit\n";
-	string Login = dash + "Login\n- back\n- <username> <password>\n- exit\n";
-	string Exit = dash + "--Server has disconnect you\n--Bye~ :D\n";
+	map<string,string> gui;
+	gui["menu"] = "===========================\nMENU\n- login\n- register\n- exit\n";
+	gui["lobby"] = "===========================\nLOBBY\n- create\n- join <roomid>\n- logout\n- exit\n";
+	gui["register"] = "===========================\nRegister\n- back\n- <username> <password>\n- exit\n";
+	gui["login"] = "===========================\nLogin\n- back\n- <username> <password>\n- exit\n";
+	gui["room"] = "===========================\nROOM\n- back\n- start (only host can do this)\n- exit\n";
+	gui["exit"] = "===========================\n--Server has disconnect you\n--Bye~ :D\n";
 
 	// SELECT init
 	int maxfdp1, stdineof;
@@ -84,27 +84,15 @@ void menu(FILE *fp, int sockfd)
 					{
 						clr_scr();
 					}
-					else if (command == "menu")
-					{
-						cout << Menu;
-					}
-					else if (command == "lobby")
-					{
-						cout << Lobby;
-					}
-					else if (command == "register")
-					{
-						cout << Register;
-					}
-					else if (command == "login")
-					{
-						cout << Login;
-					}
 					else if (command == "exit")
 					{
-						cout << Exit;
+						cout << gui[command];
 						close(sockfd);
 						return;
+					}
+					else if (gui.find(command) != gui.end())
+					{
+						cout << gui[command];
 					}
 					else
 					{
@@ -113,7 +101,6 @@ void menu(FILE *fp, int sockfd)
 						cout << command << '\n';
 					}
 				}
-				// cout << Console;
 			}
 		}
 

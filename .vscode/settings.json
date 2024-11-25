@@ -9,6 +9,10 @@
         "string": "cpp",
         "vector": "cpp",
         "valarray": "cpp",
-        "iostream": "cpp"
+        "iostream": "cpp",
+        "random": "cpp",
+        "array": "cpp",
+        "string_view": "cpp",
+        "span": "cpp"
     }
 }
