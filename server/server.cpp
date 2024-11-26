@@ -1,7 +1,20 @@
 /* include fig01 */
 #include "../unp.h"
+#include "Timer.hpp"
 #include <bits/stdc++.h>
 using namespace std;
+
+// variables
+int client[FD_SETSIZE];
+int maxi;
+string sendline, recvline;
+string cliip[FD_SETSIZE];
+string state[FD_SETSIZE] = {"NONE"};
+string isLogin[FD_SETSIZE] = {""};
+map<string, string> user;
+map<int, vector<int>> gameroom;
+map<int, vector<string>> gamechat;
+int inRoom[FD_SETSIZE];
 
 bool isNumber(const string &str)
 {
@@ -20,7 +33,9 @@ int Read(int fd, string &s)
 
 void Write(int fd, string s)
 {
-	s.insert(0, "@clr");
+	if(s[0] != '%') s.insert(0, "@clr");
+	else s.erase(s.begin());
+
 	if (s.back() == '\n')
 		s.back() = '\0';
 	else
@@ -31,7 +46,7 @@ void Write(int fd, string s)
 	return;
 }
 
-string playerlist(string user[], string state[], int maxi, int myself)
+string playerlist(int myself)
 {
 	bool isZero = true;
 	string list = "@╔════════════════════╦════════════════════╗\n";
@@ -39,10 +54,10 @@ string playerlist(string user[], string state[], int maxi, int myself)
 	list += "╠════════════════════╬════════════════════╣\n";
 	for (int i = 0; i <= maxi; i++)
 	{
-		if (user[i].empty() || i == myself)
+		if (isLogin[i].empty() || i == myself)
 			continue;
 		isZero = false;
-		string username = user[i], status = state[i];
+		string username = isLogin[i], status = state[i];
 		username.resize(20, ' ');
 		status.resize(20, ' ');
 		list += "║" + username + "║" + status + "║\n";
@@ -53,7 +68,7 @@ string playerlist(string user[], string state[], int maxi, int myself)
 	return list;
 }
 
-string roomlist(map<int, vector<int>> &gameroom, string user[])
+string roomlist()
 {
 	bool isZero = true;
 	string list = "@╔════════════════════╦════════════════════╗\n";
@@ -62,8 +77,9 @@ string roomlist(map<int, vector<int>> &gameroom, string user[])
 	for (auto [host, room] : gameroom)
 	{
 		isZero = false;
-		string username = "[" + to_string(host) + "] " + user[host];
+		string username = "[" + to_string(host) + "] " + isLogin[host];
 		string status = to_string(room.size()) + "/ 4 players";
+		if(state[host] == "IN GAME") status += " [GAME]";
 		username.resize(20, ' ');
 		status.resize(20, ' ');
 		list += "║" + username + "║" + status + "║\n";
@@ -74,7 +90,7 @@ string roomlist(map<int, vector<int>> &gameroom, string user[])
 	return list;
 }
 
-void notifyLobby(map<int, vector<int>> &gameroom, int client[], string isLogin[], string state[], int maxi, int i)
+void notifyLobby(int i)
 {
 	// if broadcast all
 	if (i == -1)
@@ -83,7 +99,7 @@ void notifyLobby(map<int, vector<int>> &gameroom, int client[], string isLogin[]
 		{
 			if (client[j] < 0 || state[j] != "LOBBY")
 				continue;
-			Write(client[j], roomlist(gameroom, isLogin) + playerlist(isLogin, state, maxi, j) + "@lobby");
+			Write(client[j], roomlist() + playerlist(j) + "@lobby");
 		}
 	}
 	else
@@ -92,21 +108,21 @@ void notifyLobby(map<int, vector<int>> &gameroom, int client[], string isLogin[]
 		{
 			if (client[j] < 0 || client[j] == client[i] || state[j] != "LOBBY")
 				continue;
-			Write(client[j], roomlist(gameroom, isLogin) + playerlist(isLogin, state, maxi, j) + "@lobby");
+			Write(client[j], roomlist() + playerlist(j) + "@lobby");
 		}
 	}
 }
 
-string displayGameroom(vector<int> &room, string user[])
+string displayGameroom(int gameroom_id)
 {
 	bool isZero = true;
 	string list = "@╔════════════════════╦════════════════════╗\n";
 	list += "║Player              ║status              ║\n";
 	list += "╠════════════════════╬════════════════════╣\n";
-	for (auto cli : room)
+	for (auto cli : gameroom[gameroom_id])
 	{
 		isZero = false;
-		string username = user[cli];
+		string username = isLogin[cli];
 		string status = "Waiting";
 		username.resize(20, ' ');
 		status.resize(20, ' ');
@@ -118,15 +134,15 @@ string displayGameroom(vector<int> &room, string user[])
 	return list;
 }
 
-void notifyGameroom(vector<int> &room, string user[], int client[])
+void notifyGameroom(int gameroom_id)
 {
-	for (auto cli : room)
+	for (auto cli : gameroom[gameroom_id])
 	{
-		Write(client[cli], "@player joined\n" + displayGameroom(room, user) + "@room");
+		Write(client[cli], "@player joined\n" + displayGameroom(gameroom_id) + "@room");
 	}
 }
 
-void hostExit(map<int, vector<int>> &gameroom, string state[], int client[], int inRoom[], int i)
+void hostExit(int i)
 {
 	if (inRoom[i] == i)
 	{
@@ -137,19 +153,51 @@ void hostExit(map<int, vector<int>> &gameroom, string state[], int client[], int
 			inRoom[cli] = -1;
 		}
 		gameroom.erase(gameroom.find(i));
+		gamechat.erase(gamechat.find(i));
 		inRoom[i] = -1;
 	}
 }
 
+void *gamethread(void *arg){
+	int i = *((int*) arg);
+	delete (int*)arg;
+	pthread_detach(pthread_self());
+
+	F2::Timer t(1000); // A timer ticking every second, you could also specify the highest tick value, but not really useful here
+
+	t.start(); // Starting the timer (optional here, but useful if it was instancied long before this)
+
+	while(t.get_tick() < 10) // Running for [num] secs
+	{
+		if(t.updated()) // If the tick value has changed
+		{
+			for(int j = 0 ; j < gamechat[i].size() ; j++){
+				if(!gamechat[i][j].empty()){
+					for(int k = 0 ; k < gameroom[i].size() ; k++){
+						if(j != k) Write(client[gameroom[i][k]], "%(" + isLogin[gameroom[i][j]] + "): " + gamechat[i][j] + "\n");
+					}
+					gamechat[i][j].clear();
+				}
+			}
+		}
+	}
+
+	state[i] = "LOBBY";
+	hostExit(i);
+	notifyLobby(-1);
+
+	return NULL;
+}
+
 int main(int argc, char **argv)
 {
-	int i, maxi, maxfd, listenfd, connfd, sockfd;
-	int nready, client[FD_SETSIZE];
+	int i, maxfd, listenfd, connfd, sockfd;
+	int nready;
 	ssize_t n;
 	fd_set rset, allset;
-	char buf[MAXLINE];
 	socklen_t clilen;
 	struct sockaddr_in cliaddr, servaddr;
+	pthread_t p[FD_SETSIZE];
 
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -180,12 +228,7 @@ int main(int argc, char **argv)
 	/* end fig01 */
 
 	printf("server is running...\n");
-	string sendline, recvline, cliip[FD_SETSIZE];
-	string state[FD_SETSIZE] = {"NONE"};
-	string isLogin[FD_SETSIZE] = {""};
-	map<string, string> user;
-	map<int, vector<int>> gameroom;
-	int inRoom[FD_SETSIZE] = {-1};
+	memset(inRoom, -1, FD_SETSIZE*sizeof(int));
 
 	/* include fig02 */
 	for (;;)
@@ -243,6 +286,8 @@ int main(int argc, char **argv)
 				{
 					if (command.empty())
 						continue;
+					
+					// cout << state[i] << " " << command << endl; // enable debug
 
 					if (state[i] == "MENU")
 					{
@@ -365,8 +410,8 @@ int main(int argc, char **argv)
 									{
 										state[i] = "LOBBY";
 										isLogin[i] = username;
-										Write(client[i], "@login successful\n" + roomlist(gameroom, isLogin) + playerlist(isLogin, state, maxi, i) + "@lobby");
-										notifyLobby(gameroom, client, isLogin, state, maxi, i);
+										Write(client[i], "@login successful\n" + roomlist() + playerlist(i) + "@lobby");
+										notifyLobby(i);
 									}
 									else
 									{
@@ -389,42 +434,62 @@ int main(int argc, char **argv)
 						{
 							state[i] = "WAITING";
 							gameroom[i].push_back({i});
+							gamechat[i].push_back({""});
 							inRoom[i] = i;
-							Write(client[i], "@gameroom create successful\n" + displayGameroom(gameroom[i], isLogin) + "@room");
-							notifyLobby(gameroom, client, isLogin, state, maxi, i);
+							Write(client[i], "@gameroom create successful\n" + displayGameroom(i) + "@room");
+							notifyLobby(i);
 						}
 						else if (command.find("join") != string::npos)
 						{
 							stringstream ss(command);
 							string temp;
-							int roomid;
+							int roomid = 0;
 							ss >> temp >> roomid;
+
+							if(roomid == 0){
+								if(gameroom.find(roomid) == gameroom.end()){
+									bool isRoomFind = false;
+									for(auto [host, room] : gameroom){
+										if(room.size() < 4){
+											isRoomFind = true;
+											roomid = host;
+											break;
+										}
+									}
+									if(!isRoomFind){
+										Write(client[i], "@gameroom is not found!" + roomlist() + playerlist(i) + "@lobby");
+										continue;
+									}
+								}
+							}
+
 							if (gameroom.find(roomid) == gameroom.end())
 							{
-								Write(client[i], "@gameroom is not exist!" + roomlist(gameroom, isLogin) + playerlist(isLogin, state, maxi, i) + "@lobby");
+								Write(client[i], "@gameroom is not exist!" + roomlist() + playerlist(i) + "@lobby");
 							}
 							else
 							{
 								if (gameroom[roomid].size() == 4)
 								{
-									Write(client[i], "@gameroom is full!" + roomlist(gameroom, isLogin) + playerlist(isLogin, state, maxi, i) + "@lobby");
+									Write(client[i], "@gameroom is full!" + roomlist() + playerlist(i) + "@lobby");
 								}
 								else
 								{
 									state[i] = "WAITING";
 									gameroom[roomid].push_back(i);
+									gamechat[roomid].push_back("");
 									inRoom[i] = roomid;
-									notifyGameroom(gameroom[roomid], isLogin, client);
+									notifyGameroom(roomid);
 								}
 							}
-							notifyLobby(gameroom, client, isLogin, state, maxi, i);
+							notifyLobby(i);
 						}
 						else if (command == "logout")
 						{
 							isLogin[i].clear();
 							Write(client[i], "@logout successful\n@menu");
 							state[i] = "MENU";
-							notifyLobby(gameroom, client, isLogin, state, maxi, i);
+							notifyLobby(i);
 						}
 						else if (command == "exit")
 						{
@@ -433,7 +498,7 @@ int main(int argc, char **argv)
 						}
 						else
 						{
-							Write(client[i], "@\"" + command + "\" is not a valid command\n" + roomlist(gameroom, isLogin) + playerlist(isLogin, state, maxi, i) + "@lobby");
+							Write(client[i], "@\"" + command + "\" is not a valid command\n" + roomlist() + playerlist(i) + "@lobby");
 						}
 						continue;
 					}
@@ -442,10 +507,12 @@ int main(int argc, char **argv)
 					{
 						if (command == "back")
 						{
+							cout << "inRoom[i] = " << inRoom[i] << ", i = " << i << endl;
 							state[i] = "LOBBY";
 							if (inRoom[i] == i)
 							{
-								hostExit(gameroom, state, client, inRoom, i);
+								hostExit(i);
+								cout << "finish exit" << endl;
 							}
 							else
 							{
@@ -457,20 +524,31 @@ int main(int argc, char **argv)
 										break;
 									}
 								}
-								notifyGameroom(gameroom[inRoom[i]], isLogin, client);
+								notifyGameroom(inRoom[i]);
 								inRoom[i] = -1;
 							}
-							notifyLobby(gameroom, client, isLogin, state, maxi, -1);
+							notifyLobby(-1);
 						}
 						else if (command == "start")
 						{
 							if (i != inRoom[i])
 							{
-								Write(client[i], "@you are not the host!" + displayGameroom(gameroom[i], isLogin) + "@room");
+								Write(client[i], "@you are not the host!\n" + displayGameroom(inRoom[i]) + "@room");
 							}
 							else
 							{
-								// start here
+								if(gameroom[i].size() < 4){
+									Write(client[i], "@wait for more players to start...\n" + displayGameroom(i) + "@room");
+								}else{
+									for(auto cli : gameroom[i]){
+										state[cli] = "IN GAME";
+										Write(client[cli], "@game");
+									}
+									notifyLobby(-1);
+
+									int *iptr = new int(i);
+									pthread_create(&p[i], NULL, gamethread, iptr);
+								}
 							}
 						}
 						else if (command == "exit")
@@ -480,9 +558,17 @@ int main(int argc, char **argv)
 						}
 						else
 						{
-							Write(client[i], "@\"" + command + "\" is not a valid command\n" + displayGameroom(gameroom[i], isLogin) + "@room");
+							Write(client[i], "@\"" + command + "\" is not a valid command\n" + displayGameroom(i) + "@room");
 						}
 						continue;
+					}
+
+					if (state[i] == "IN GAME"){
+						for(auto cli : gameroom[inRoom[i]]){
+							if(cli == i){
+								gamechat[inRoom[i]][cli] = command;
+							}
+						}
 					}
 				}
 
@@ -499,7 +585,7 @@ int main(int argc, char **argv)
 				client[i] = -1;
 				state[i] = "NONE";
 				isLogin[i].clear();
-				hostExit(gameroom, state, client, inRoom, i);
+				hostExit(i);
 				if (inRoom[i] != -1)
 				{
 					for (auto iter = gameroom[inRoom[i]].begin(); iter != gameroom[inRoom[i]].end(); iter++)
@@ -510,10 +596,10 @@ int main(int argc, char **argv)
 							break;
 						}
 					}
-					notifyGameroom(gameroom[inRoom[i]], isLogin, client);
+					notifyGameroom(inRoom[i]);
 					inRoom[i] = -1;
 				}
-				notifyLobby(gameroom, client, isLogin, state, maxi, i);
+				notifyLobby(i);
 			}
 		}
 	}

@@ -48,6 +48,7 @@ void menu(FILE *fp, int sockfd)
 	gui["login"] = "===========================\nLogin\n- back\n- <username> <password>\n- exit\n";
 	gui["room"] = "===========================\nROOM\n- back\n- start (only host can do this)\n- exit\n";
 	gui["exit"] = "===========================\n--Server has disconnect you\n--Bye~ :D\n";
+	gui["game"] = "===========================\nGAME\n";
 
 	// SELECT init
 	int maxfdp1, stdineof;
