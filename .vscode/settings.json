@@ -14,6 +14,12 @@
         "array": "cpp",
         "string_view": "cpp",
         "span": "cpp",
-        "new": "cpp"
+        "new": "cpp",
+        "ostream": "cpp",
+        "unordered_map": "cpp",
+        "unordered_set": "cpp",
+        "initializer_list": "cpp",
+        "ranges": "cpp",
+        "regex": "cpp"
     }
 }

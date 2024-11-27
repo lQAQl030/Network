@@ -159,31 +159,148 @@ void hostExit(int i)
 }
 
 void *gamethread(void *arg){
-	int i = *((int*) arg);
+	int host = *((int*) arg);
 	delete (int*)arg;
 	pthread_detach(pthread_self());
 
-	F2::Timer t(1000); // A timer ticking every second, you could also specify the highest tick value, but not really useful here
+	#define RED 0
+	#define GREEN 1
+	#define YELLOW 2
+	#define BLUE 3
+	#define WILD 4
+	#define SKIP 10
+	#define TURN 11
+	#define ADD2 12
+	#define COLOR 13
+	#define ADD4 14
 
-	t.start(); // Starting the timer (optional here, but useful if it was instancied long before this)
+	// RNG
+	auto rd = std::random_device {}; 
+	auto rng = std::default_random_engine { rd() };
 
-	while(t.get_tick() < 10) // Running for [num] secs
+	// local variables
+	int currentPlayer = 0;
+	vector<string> chatroom;
+	vector<vector<pair<int,int>>> hand(4);
+	vector<pair<int,int>> table;
+	vector<pair<int,int>> deck;
+	pair<int,int> currcard;
+	bool direction = true;
+	bool statusUpdate = false;
+	int addCardBuff = 0;
+
+	// initialize the deck
+	for(int color = 0 ; color < 4 ; color++){
+		for(int number = 0 ; number <= 12 ; number++){
+			deck.push_back({color, number});
+			deck.push_back({color, number});
+		}
+	}
+	for(int i = 0 ; i < 4 ; i++){
+		deck.push_back({WILD, COLOR});
+		deck.push_back({WILD, ADD4});
+	}
+	shuffle(deck.begin(), deck.end(), rng);
+
+	// initilaize hands
+	for(int player = 0 ; player < 4 ; player++){
+		string hand_str = "@hand@";
+		for(int i = 0 ; i < 7 ; i++){
+			hand[player].push_back(deck.back());
+			hand_str += to_string(deck.back().first) + " " + to_string(deck.back().second) + " ";
+			deck.pop_back();
+		}
+		Write(client[gameroom[host][player]], hand_str);
+	}
+
+	// init msg
+	for(int player = 0 ; player < 4 ; player++){
+		Write(client[gameroom[host][player]], "@card@-1 -1@disp");
+	}
+	Write(client[gameroom[host][0]], "%@It's your turn now");
+
+	// timer set up
+	F2::Timer t(1000); // ms every tick
+	t.start(); // Starting the timer
+
+	while(t.get_tick() < 300) // Running for [num] secs
 	{
-		if(t.updated()) // If the tick value has changed
-		{
-			for(int j = 0 ; j < gamechat[i].size() ; j++){
-				if(!gamechat[i][j].empty()){
-					for(int k = 0 ; k < gameroom[i].size() ; k++){
-						if(j != k) Write(client[gameroom[i][k]], "%(" + isLogin[gameroom[i][j]] + "): " + gamechat[i][j] + "\n");
+		if(t.updated()){
+			for(int player = 0 ; player < gamechat[host].size() ; player++){
+				if(!gamechat[host][player].empty()){
+					statusUpdate = true;
+					string command = gamechat[host][player];
+					gamechat[host][player].clear();
+					cout << "recv msg: " << command << endl;
+
+					if(player == currentPlayer){
+						if(command[0] == '#'){
+							stringstream sscard(command.substr(1));
+							sscard >> currcard.first >> currcard.second;
+							auto cardpos = std::find(hand[player].begin(), hand[player].end(), currcard);
+							hand[player].erase(cardpos);
+							cout << "Player (" + isLogin[gameroom[host][player]] + ") sent " << currcard.first << " " << currcard.second << endl;
+
+							if(currcard.second == SKIP){
+								if(direction){
+									currentPlayer = (currentPlayer + 2) % 4;
+								}else{
+									currentPlayer -= 2;
+									if(currentPlayer < 0) currentPlayer += 4;
+								}
+								continue;
+							}else if(currcard.second == TURN){
+								direction = !direction;
+							}else if(currcard.second == ADD2){
+								addCardBuff += 2;
+							}else if(currcard.second == COLOR){
+								sscard >> currcard.first;
+							}else if(currcard.second == ADD4){
+								addCardBuff += 4;
+								sscard >> currcard.first;
+							}
+
+							currentPlayer += (direction) ?1 :-1;
+							if(currentPlayer < 0) currentPlayer += 4;
+							currentPlayer %= 4;
+							continue;
+						}
 					}
-					gamechat[i][j].clear();
+
+					chatroom.push_back("(" + isLogin[gameroom[host][player]] + "): " + command );
 				}
+			}
+
+			// current status
+			if(statusUpdate){
+				statusUpdate = false;
+				string historyChat = "@";
+				for(auto chat : chatroom){
+					historyChat += chat + "\n";
+				}
+				for(int player = 0 ; player < 4 ; player++){
+					Write(client[gameroom[host][player]], "%@card@" + to_string(currcard.first) + " " + to_string(currcard.second));
+				}
+				for(int player = 0 ; player < 4 ; player++){
+					Write(client[gameroom[host][player]], historyChat + "@disp");
+				}
+				Write(client[gameroom[host][currentPlayer]], "%@It's your turn now");
 			}
 		}
 	}
 
-	state[i] = "LOBBY";
-	hostExit(i);
+	#undef RED
+	#undef YELLOW
+	#undef GREEN
+	#undef BLUE
+	#undef SKIP
+	#undef TURN
+	#undef ADD2
+	#undef COLOR
+	#undef ADD4
+
+	state[host] = "LOBBY";
+	hostExit(host);
 	notifyLobby(-1);
 
 	return NULL;
@@ -564,9 +681,10 @@ int main(int argc, char **argv)
 					}
 
 					if (state[i] == "IN GAME"){
-						for(auto cli : gameroom[inRoom[i]]){
-							if(cli == i){
-								gamechat[inRoom[i]][cli] = command;
+						for(int j = 0 ; j < 4 ; j++){
+							if(gameroom[inRoom[i]][j] == i){
+								gamechat[inRoom[i]][j] = command;
+								break;
 							}
 						}
 					}
