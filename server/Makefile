@@ -5,7 +5,7 @@ PROGS =	clean server
 all:	${PROGS}
 
 server:
-		${CXX} -o server server.cpp Timer.cpp
+		${CXX} -fsanitize=address -g -o server server.cpp Timer.cpp -pthread
 		
 clean:
 		rm -f ${PROGS} ${CLEANFILES}

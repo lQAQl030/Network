@@ -4,6 +4,17 @@
 #include <bits/stdc++.h>
 using namespace std;
 
+#define RED 1
+#define GREEN 2
+#define YELLOW 3
+#define BLUE 4
+#define WILD 5
+#define SKIP 10
+#define TURN 11
+#define ADD2 12
+#define COLOR 13
+#define ADD4 14
+
 // variables
 int client[FD_SETSIZE];
 int maxi;
@@ -24,6 +35,7 @@ bool isNumber(const string &str)
 int Read(int fd, string &s)
 {
 	char buffer[MAXLINE];
+	memset(buffer, 0, MAXLINE);
 	int count = read(fd, buffer, MAXLINE);
 	if (count == 0)
 		return 0;
@@ -138,7 +150,7 @@ void notifyGameroom(int gameroom_id)
 {
 	for (auto cli : gameroom[gameroom_id])
 	{
-		Write(client[cli], "@player joined\n" + displayGameroom(gameroom_id) + "@room");
+		if(state[cli] == "WAITING") Write(client[cli], "@player joined\n" + displayGameroom(gameroom_id) + "@room");
 	}
 }
 
@@ -146,9 +158,11 @@ void hostExit(int i)
 {
 	if (inRoom[i] == i)
 	{
+		if(gameroom.find(i) == gameroom.end()) return;
 		gameroom[i].erase(gameroom[i].begin()); // erase host to avoid write to void
 		for (auto cli : gameroom[i])
 		{
+			if(cli == -1) continue;
 			state[cli] = "LOBBY";
 			inRoom[cli] = -1;
 		}
@@ -158,21 +172,96 @@ void hostExit(int i)
 	}
 }
 
+void notifyResult(int i)
+{
+	for (auto cli : gameroom[i])
+	{
+		state[cli] = "RESULT";
+		inRoom[cli] = -1;
+	}
+	gameroom.erase(gameroom.find(i));
+	gamechat.erase(gamechat.find(i));
+	inRoom[i] = -1;
+}
+
+string num2sym(int number){
+	string symbol;
+	if(number == SKIP){
+		symbol = "Φ ";
+	}else if(number == TURN){
+		symbol = "╰╮";
+	}else if(number == ADD2){
+		symbol = "+2";
+	}else if(number == COLOR){
+		symbol = "⊕ ";
+	}else if(number == ADD4){
+		symbol = "+4";
+	}else{
+		symbol = to_string(number) + " ";
+	}
+	return symbol;
+}
+
+string gameInfoClient(int host, vector<pair<int,int>> table, vector<vector<pair<int,int>>> hands){
+	string info = "@";
+
+	info += "Table:\n";
+	for(auto card : table){
+		info += "\x1b[1;" + to_string(card.first+30) + "m" + num2sym(card.second) + "\x1b[0m ";
+	}
+	info += "\n";
+
+	info += "Player Hands:\n";
+	for(int player = 0 ; player < 4 ; player++){
+		info += "(" + isLogin[gameroom[host][player]] + "): ";
+		for(auto card : hands[player]){
+			info += "■ ";
+		}
+		info += "(" + to_string(hands[player].size()) + ")\n";
+	}
+
+	return info;
+}
+
+string gameInfo(int host, vector<pair<int,int>> deck, vector<pair<int,int>> table, vector<vector<pair<int,int>>> hands, pair<int,int> currcard, int time_elapsed){
+	string info = "@==========STATUS=========\n";
+	info += "DECK:\n";
+	for(auto card : deck){
+		info += "\x1b[1;" + to_string(card.first+30) + "m" + num2sym(card.second) + "\x1b[0m ";
+	}
+	info += "\n";
+
+	info += "Table:\n";
+	for(auto card : table){
+		info += "\x1b[1;" + to_string(card.first+30) + "m" + num2sym(card.second) + "\x1b[0m ";
+	}
+	info += "\n";
+
+	info += "Player Hands:\n";
+	for(int player = 0 ; player < 4 ; player++){
+		info += "(" + isLogin[gameroom[host][player]] + "): ";
+		for(auto card : hands[player]){
+			info += "\x1b[1;" + to_string(card.first+30) + "m" + num2sym(card.second) + "\x1b[0m ";
+		}
+		info += "\n";
+	}
+	
+
+	info += "Current Card:\n";
+	info += "\x1b[1;" + to_string(currcard.first+30) + "m" + num2sym(currcard.second) + "\x1b[0m\n";
+
+	info += "Elapsed time:\n";
+	info += to_string(time_elapsed) + "\n";
+	
+	info += "=========================\n";
+
+	return info;
+}
+
 void *gamethread(void *arg){
 	int host = *((int*) arg);
 	delete (int*)arg;
 	pthread_detach(pthread_self());
-
-	#define RED 0
-	#define GREEN 1
-	#define YELLOW 2
-	#define BLUE 3
-	#define WILD 4
-	#define SKIP 10
-	#define TURN 11
-	#define ADD2 12
-	#define COLOR 13
-	#define ADD4 14
 
 	// RNG
 	auto rd = std::random_device {}; 
@@ -181,7 +270,7 @@ void *gamethread(void *arg){
 	// local variables
 	int currentPlayer = 0;
 	vector<string> chatroom;
-	vector<vector<pair<int,int>>> hand(4);
+	vector<vector<pair<int,int>>> hands(4);
 	vector<pair<int,int>> table;
 	vector<pair<int,int>> deck;
 	pair<int,int> currcard;
@@ -190,7 +279,7 @@ void *gamethread(void *arg){
 	int addCardBuff = 0;
 
 	// initialize the deck
-	for(int color = 0 ; color < 4 ; color++){
+	for(int color = 1 ; color <= 4 ; color++){
 		for(int number = 0 ; number <= 12 ; number++){
 			deck.push_back({color, number});
 			deck.push_back({color, number});
@@ -206,7 +295,7 @@ void *gamethread(void *arg){
 	for(int player = 0 ; player < 4 ; player++){
 		string hand_str = "@hand@";
 		for(int i = 0 ; i < 7 ; i++){
-			hand[player].push_back(deck.back());
+			hands[player].push_back(deck.back());
 			hand_str += to_string(deck.back().first) + " " + to_string(deck.back().second) + " ";
 			deck.pop_back();
 		}
@@ -215,49 +304,86 @@ void *gamethread(void *arg){
 
 	// init msg
 	for(int player = 0 ; player < 4 ; player++){
-		Write(client[gameroom[host][player]], "@card@-1 -1@disp");
+		Write(client[gameroom[host][player]], "@card@-1 -1" + gameInfoClient(host, table, hands) + "@disp");
 	}
-	Write(client[gameroom[host][0]], "%@It's your turn now");
+	Write(client[gameroom[host][0]], "%@turn");
 
 	// timer set up
 	F2::Timer t(1000); // ms every tick
 	t.start(); // Starting the timer
 
-	while(t.get_tick() < 300) // Running for [num] secs
+	while(t.get_tick() >= 0 && gameroom.find(host) != gameroom.end()) // Running for [num] secs
 	{
 		if(t.updated()){
 			for(int player = 0 ; player < gamechat[host].size() ; player++){
 				if(!gamechat[host][player].empty()){
 					statusUpdate = true;
+					// cout << "recv msg: " << gamechat[host][player] << endl;
 					string command = gamechat[host][player];
 					gamechat[host][player].clear();
-					cout << "recv msg: " << command << endl;
 
 					if(player == currentPlayer){
 						if(command[0] == '#'){
-							stringstream sscard(command.substr(1));
-							sscard >> currcard.first >> currcard.second;
-							auto cardpos = std::find(hand[player].begin(), hand[player].end(), currcard);
-							hand[player].erase(cardpos);
-							cout << "Player (" + isLogin[gameroom[host][player]] + ") sent " << currcard.first << " " << currcard.second << endl;
-
-							if(currcard.second == SKIP){
-								if(direction){
-									currentPlayer = (currentPlayer + 2) % 4;
-								}else{
-									currentPlayer -= 2;
-									if(currentPlayer < 0) currentPlayer += 4;
+							string cardcommand = command.substr(1);
+							if(cardcommand == "draw"){
+								cout << "Player (" + isLogin[gameroom[host][player]] + ") draw " << ((addCardBuff) ?addCardBuff :1) << " cards" << endl;
+								string hand_str = "%@hand@";
+								int drawcnt = (addCardBuff) ?addCardBuff :1;
+								for(int j = 0 ; j < drawcnt ; j++){
+									if(deck.empty()){
+										shuffle(table.begin(), table.end(), rng);
+										deck.insert(deck.end(), table.begin(), table.end());
+										table.clear();
+									}
+									hands[player].push_back(deck.back());
+									hand_str += to_string(deck.back().first) + " " + to_string(deck.back().second) + " ";
+									deck.pop_back();
 								}
-								continue;
-							}else if(currcard.second == TURN){
-								direction = !direction;
-							}else if(currcard.second == ADD2){
-								addCardBuff += 2;
-							}else if(currcard.second == COLOR){
-								sscard >> currcard.first;
-							}else if(currcard.second == ADD4){
-								addCardBuff += 4;
-								sscard >> currcard.first;
+								addCardBuff = 0;
+								Write(client[gameroom[host][player]], hand_str);
+							}else{
+								stringstream sscard(cardcommand);
+								sscard >> currcard.first >> currcard.second;
+
+								auto cardpos = std::find(hands[player].begin(), hands[player].end(), currcard);
+								hands[player].erase(cardpos);
+								table.push_back(currcard);
+								cout << "Player (" + isLogin[gameroom[host][player]] + ") sent " << currcard.first << " " << currcard.second << endl;
+
+								// end sequence
+								if(hands[player].empty()){
+									string info = gameInfo(host, deck, table, hands, currcard, t.get_tick());
+									info += "Winner:\n" + isLogin[gameroom[host][player]] + "\n";
+
+									for(auto cli : gameroom[host]){
+										Write(client[cli], info + "@win");
+									}
+
+									notifyResult(host);
+									notifyLobby(-1);
+
+									return NULL;
+								}
+
+								// function card
+								if(currcard.second == SKIP){
+									if(direction){
+										currentPlayer = (currentPlayer + 2) % 4;
+									}else{
+										currentPlayer -= 2;
+										if(currentPlayer < 0) currentPlayer += 4;
+									}
+									continue;
+								}else if(currcard.second == TURN){
+									direction = !direction;
+								}else if(currcard.second == ADD2){
+									addCardBuff += 2;
+								}else if(currcard.second == COLOR){
+									sscard >> currcard.first;
+								}else if(currcard.second == ADD4){
+									addCardBuff += 4;
+									sscard >> currcard.first;
+								}
 							}
 
 							currentPlayer += (direction) ?1 :-1;
@@ -267,14 +393,33 @@ void *gamethread(void *arg){
 						}
 					}
 
+					if(command == "leave"){
+						string info = gameInfo(host, deck, table, hands, currcard, t.get_tick());
+						info += "Player Quit: " + isLogin[gameroom[host][player]] + "\n";
+
+						for(auto cli : gameroom[host]){
+							Write(client[cli], info + "@win");
+						}
+
+						notifyResult(host);
+						notifyLobby(-1);
+
+						return NULL;
+					}
+
 					chatroom.push_back("(" + isLogin[gameroom[host][player]] + "): " + command );
 				}
 			}
 
 			// current status
 			if(statusUpdate){
+				// debug
+				// cout << gameInfo(host, deck, table, hands, currcard, t.get_tick());
+
+				// game
 				statusUpdate = false;
 				string historyChat = "@";
+				string info = gameInfoClient(host, table, hands);
 				for(auto chat : chatroom){
 					historyChat += chat + "\n";
 				}
@@ -282,23 +427,19 @@ void *gamethread(void *arg){
 					Write(client[gameroom[host][player]], "%@card@" + to_string(currcard.first) + " " + to_string(currcard.second));
 				}
 				for(int player = 0 ; player < 4 ; player++){
-					Write(client[gameroom[host][player]], historyChat + "@disp");
+					Write(client[gameroom[host][player]], historyChat + info + "@disp");
 				}
-				Write(client[gameroom[host][currentPlayer]], "%@It's your turn now");
+				string sentCurrent = "%@turn";
+				if(addCardBuff){
+					sentCurrent += "@add";
+				}
+				Write(client[gameroom[host][currentPlayer]], sentCurrent);
 			}
 		}
 	}
 
-	#undef RED
-	#undef YELLOW
-	#undef GREEN
-	#undef BLUE
-	#undef SKIP
-	#undef TURN
-	#undef ADD2
-	#undef COLOR
-	#undef ADD4
-
+	gameexit:
+	// not normal
 	state[host] = "LOBBY";
 	hostExit(host);
 	notifyLobby(-1);
@@ -624,12 +765,12 @@ int main(int argc, char **argv)
 					{
 						if (command == "back")
 						{
-							cout << "inRoom[i] = " << inRoom[i] << ", i = " << i << endl;
+							// cout << "inRoom[i] = " << inRoom[i] << ", i = " << i << endl;
 							state[i] = "LOBBY";
 							if (inRoom[i] == i)
 							{
 								hostExit(i);
-								cout << "finish exit" << endl;
+								// cout << "finish exit" << endl;
 							}
 							else
 							{
@@ -655,7 +796,7 @@ int main(int argc, char **argv)
 							else
 							{
 								if(gameroom[i].size() < 4){
-									Write(client[i], "@wait for more players to start...\n" + displayGameroom(i) + "@room");
+									Write(client[i], "@wait for more players to start...\n" + displayGameroom(inRoom[i]) + "@room");
 								}else{
 									for(auto cli : gameroom[i]){
 										state[cli] = "IN GAME";
@@ -675,7 +816,7 @@ int main(int argc, char **argv)
 						}
 						else
 						{
-							Write(client[i], "@\"" + command + "\" is not a valid command\n" + displayGameroom(i) + "@room");
+							Write(client[i], "@\"" + command + "\" is not a valid command\n" + displayGameroom(inRoom[i]) + "@room");
 						}
 						continue;
 					}
@@ -688,6 +829,25 @@ int main(int argc, char **argv)
 							}
 						}
 					}
+
+					if (state[i] == "RESULT")
+					{
+						if (command == "back")
+						{
+							state[i] = "LOBBY";
+							notifyLobby(-1);
+						}
+						else if (command == "exit")
+						{
+							Write(client[i], "@exit");
+							goto userexit;
+						}
+						else
+						{
+							Write(client[i], "@\"" + command + "\" is not a valid command\n" + roomlist() + playerlist(i) + "@lobby");
+						}
+						continue;
+					}
 				}
 
 				if (--nready <= 0)
@@ -695,28 +855,32 @@ int main(int argc, char **argv)
 
 				continue;
 
-			userexit:
+				userexit:
 				// user exit template
 				cout << "--player from [" + cliip[i] + "] disconnected--\n";
 				close(client[i]);
 				FD_CLR(client[i], &allset);
-				client[i] = -1;
-				state[i] = "NONE";
-				isLogin[i].clear();
 				hostExit(i);
 				if (inRoom[i] != -1)
 				{
-					for (auto iter = gameroom[inRoom[i]].begin(); iter != gameroom[inRoom[i]].end(); iter++)
-					{
-						if (*iter == i)
+					if(state[i] == "IN GAME"){
+						hostExit(inRoom[i]);
+					}else{
+						for (auto iter = gameroom[inRoom[i]].begin(); iter != gameroom[inRoom[i]].end(); iter++)
 						{
-							gameroom[inRoom[i]].erase(iter);
-							break;
+							if (*iter == i)
+							{
+								gameroom[inRoom[i]].erase(iter);
+								break;
+							}
 						}
+						notifyGameroom(inRoom[i]);
+						inRoom[i] = -1;
 					}
-					notifyGameroom(inRoom[i]);
-					inRoom[i] = -1;
 				}
+				client[i] = -1;
+				state[i] = "NONE";
+				isLogin[i].clear();
 				notifyLobby(i);
 			}
 		}
