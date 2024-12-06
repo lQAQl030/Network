@@ -62,8 +62,8 @@ string playerlist(int myself)
 {
 	bool isZero = true;
 	string list = "@╔════════════════════╦════════════════════╗\n";
-	list += "║player              ║status              ║\n";
-	list += "╠════════════════════╬════════════════════╣\n";
+	list += "  ║player              ║status              ║\n";
+	list += "  ╠════════════════════╬════════════════════╣\n";
 	for (int i = 0; i <= maxi; i++)
 	{
 		if (isLogin[i].empty() || i == myself)
@@ -72,11 +72,11 @@ string playerlist(int myself)
 		string username = isLogin[i], status = state[i];
 		username.resize(20, ' ');
 		status.resize(20, ' ');
-		list += "║" + username + "║" + status + "║\n";
+		list += "  ║" + username + "║" + status + "║\n";
 	}
 	if (isZero)
-		list += "║             no player online            ║\n";
-	list += "╚════════════════════╩════════════════════╝\n";
+		list += "  ║             no player online            ║\n";
+	list += "  ╚════════════════════╩════════════════════╝\n";
 	return list;
 }
 
@@ -84,8 +84,8 @@ string roomlist()
 {
 	bool isZero = true;
 	string list = "@╔════════════════════╦════════════════════╗\n";
-	list += "║Room                ║status              ║\n";
-	list += "╠════════════════════╬════════════════════╣\n";
+	list += "  ║Room                ║status              ║\n";
+	list += "  ╠════════════════════╬════════════════════╣\n";
 	for (auto [host, room] : gameroom)
 	{
 		isZero = false;
@@ -94,11 +94,11 @@ string roomlist()
 		if(state[host] == "IN GAME") status += " [GAME]";
 		username.resize(20, ' ');
 		status.resize(20, ' ');
-		list += "║" + username + "║" + status + "║\n";
+		list += "  ║" + username + "║" + status + "║\n";
 	}
 	if (isZero)
-		list += "║             no room available           ║\n";
-	list += "╚════════════════════╩════════════════════╝\n";
+		list += "  ║             no room available           ║\n";
+	list += "  ╚════════════════════╩════════════════════╝\n";
 	return list;
 }
 
@@ -129,8 +129,8 @@ string displayGameroom(int gameroom_id)
 {
 	bool isZero = true;
 	string list = "@╔════════════════════╦════════════════════╗\n";
-	list += "║Player              ║status              ║\n";
-	list += "╠════════════════════╬════════════════════╣\n";
+	list += "  ║Player              ║status              ║\n";
+	list += "  ╠════════════════════╬════════════════════╣\n";
 	for (auto cli : gameroom[gameroom_id])
 	{
 		isZero = false;
@@ -138,11 +138,11 @@ string displayGameroom(int gameroom_id)
 		string status = "Waiting";
 		username.resize(20, ' ');
 		status.resize(20, ' ');
-		list += "║" + username + "║" + status + "║\n";
+		list += "  ║" + username + "║" + status + "║\n";
 	}
 	if (isZero)
-		list += "║             no player in room           ║\n";
-	list += "╚════════════════════╩════════════════════╝\n";
+		list += "  ║             no player in room           ║\n";
+	list += "  ╚════════════════════╩════════════════════╝\n";
 	return list;
 }
 
@@ -205,15 +205,15 @@ string num2sym(int number){
 string gameInfoClient(int host, vector<pair<int,int>> table, vector<vector<pair<int,int>>> hands){
 	string info = "@";
 
-	info += "Table:\n";
-	for(auto card : table){
-		info += "\x1b[1;" + to_string(card.first+30) + "m" + num2sym(card.second) + "\x1b[0m ";
-	}
-	info += "\n";
+	// info += "Table:\n";
+	// for(auto card : table){
+	// 	info += "\x1b[1;" + to_string(card.first+30) + "m" + num2sym(card.second) + "\x1b[0m ";
+	// }
+	// info += "\n";
 
 	info += "Player Hands:\n";
 	for(int player = 0 ; player < 4 ; player++){
-		info += "(" + isLogin[gameroom[host][player]] + "): ";
+		info += "  (" + isLogin[gameroom[host][player]] + "): ";
 		for(auto card : hands[player]){
 			info += "■ ";
 		}
