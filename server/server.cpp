@@ -5,8 +5,8 @@
 using namespace std;
 
 #define RED 1
-#define GREEN 2
-#define YELLOW 3
+#define YELLOW 2
+#define GREEN 3
 #define BLUE 4
 #define WILD 5
 #define SKIP 10
