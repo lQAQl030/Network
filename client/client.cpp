@@ -54,13 +54,13 @@ int Write(int fd, string s)
 string num2sym(int number){
     string symbol;
     if(number == SKIP){
-        symbol = "Φ ";
+        symbol = "Φ";
     }else if(number == TURN){
-        symbol = "╰╮ ";
+        symbol = "╰╮";
     }else if(number == ADD2){
         symbol = "+2";
     }else if(number == COLOR){
-        symbol = "⊕ ";
+        symbol = "⊕";
     }else if(number == ADD4){
         symbol = "+4";
     }else{
@@ -69,10 +69,24 @@ string num2sym(int number){
     return symbol;
 }
 
+void print_multiple_lines(WINDOW *curr_win, int start_row, int start_column, string msg) {
+    string buffer = "";
+    int msg_len = msg.size();
+    for (int i = 0; i < msg_len; ++i) {
+        if (msg[i] != '\n') {
+            buffer += msg[i];
+        } else {
+            mvwprintw(curr_win, start_row, start_column, "%s", buffer.c_str());
+            ++start_row;
+            buffer = "";
+        }
+    }
+}
+
 void show_hand(WINDOW *hand_win, vector<pair<int,int>> &hand){
     werase(hand_win);
     box(hand_win, 0, 0);
-    mvwprintw(hand_win, 1, 1, "Your Hand\n");
+    mvwprintw(hand_win, 1, 2, "Your Hand");
     // id
     string id_line = "";
     for(int cnt = 0 ; cnt < hand.size() ; cnt++){
@@ -82,7 +96,7 @@ void show_hand(WINDOW *hand_win, vector<pair<int,int>> &hand){
             id_line += to_string(cnt) + " ";
         }
     }
-    mvwprintw(hand_win, 2, 2, id_line.c_str());
+    mvwprintw(hand_win, 2, 2, "%s", id_line.c_str());
 
     // card
     int x = 2;
@@ -91,12 +105,17 @@ void show_hand(WINDOW *hand_win, vector<pair<int,int>> &hand){
         // Apply color
         if(color >= 1 && color <= 5){
             wattron(hand_win, COLOR_PAIR(color));
-            mvwprintw(hand_win, 3, x, card.c_str());
+            mvwprintw(hand_win, 3, x, "%s", card.c_str());
             wattroff(hand_win, COLOR_PAIR(color));
         } else {
-            mvwprintw(hand_win, 3, x, card.c_str());
+            mvwprintw(hand_win, 3, x, "%s", card.c_str());
         }
-        x += card.length();
+        if (card == "╰╮ ") {
+            x += 3;
+        } else {
+             x += card.length();
+        }
+       
     }
     wrefresh(hand_win);
 }
@@ -112,10 +131,10 @@ void show_curr_card(WINDOW *card_win, pair<int,int> &currcard){
         string card = num2sym(currcard.second) + " ";
         if(currcard.first >=1 && currcard.first <= 5){
             wattron(card_win, COLOR_PAIR(currcard.first));
-            mvwprintw(card_win, 2, 2, card.c_str());
+            mvwprintw(card_win, 2, 2, "%s", card.c_str());
             wattroff(card_win, COLOR_PAIR(currcard.first));
         } else {
-            mvwprintw(card_win, 2, 2, card.c_str());
+            mvwprintw(card_win, 2, 2, "%s", card.c_str());
         }
     }
     wrefresh(card_win);
@@ -157,23 +176,26 @@ void menu(int sockfd)
 
     WINDOW *hand_win;
     WINDOW *card_win;
-    WINDOW *msg_win = newwin(height - 15, width - 10, 13, 2);
+    WINDOW *msg_win = newwin(height - 17, (width - 10) / 2, 13, 2);
     WINDOW *room_win;
+    WINDOW *player_win;
     WINDOW *input_win = newwin(3, width - 10, height - 4, 2);
-    WINDOW *err_win;
+    WINDOW *err_win = newwin(height - 17, (width - 10) / 2, 13, 2 + (width - 10) / 2);
 
     // Draw borders
     box(msg_win, 0, 0);
     box(input_win, 0, 0);
+    box(err_win, 0, 0);
 
     // Refresh windows
     wrefresh(msg_win);
     wrefresh(input_win);
+    wrefresh(err_win);
 
     // FUNCTION init
     string sendline, recvline;
     string state = "MENU";
-    map<string,string> gui;
+    map<string, string> gui;
     gui["menu"] = "MENU\n  - login\n  - register\n  - exit\n";
     gui["lobby"] = "LOBBY\n  - create\n  - join <roomid>\n  - logout\n  - exit\n";
     gui["register"] = "REGISTER\n  - back\n  - <username> <password>\n  - exit\n";
@@ -191,12 +213,6 @@ void menu(int sockfd)
     bool myTurn = false;
     bool beingAdded = false;
 
-
-    // Display initial menu
-    werase(msg_win);
-    box(msg_win, 0, 0);
-    mvwprintw(msg_win, 1, 2, gui["menu"].c_str());
-    wrefresh(msg_win);
 
     // Main loop
     for(;;)
@@ -258,16 +274,20 @@ void menu(int sockfd)
                             hand.clear();
                             werase(msg_win);
                             box(msg_win, 0, 0);
-                            mvwprintw(msg_win, 1, 4, gui["lobby"].c_str());
+                            print_multiple_lines(msg_win, 1, 4, gui["lobby"]);
                             wrefresh(msg_win);
-                            wrefresh(room_win);
+
+                            werase(err_win);
+                            box(err_win, 0, 0);
+                            print_multiple_lines(err_win, 1, 2, "SYSTEM MESSAGE");
+                            wrefresh(err_win);
                         }
                         else if(command == "win"){
                             state = "WIN";
                             hand.clear();
                             werase(msg_win);
                             box(msg_win, 0, 0);
-                            mvwprintw(msg_win, 1, 4, gui["win"].c_str());
+                            print_multiple_lines(msg_win, 1, 4, gui["win"]);
                             wrefresh(msg_win);
                         }
                         else if(command == "hand"){
@@ -284,6 +304,11 @@ void menu(int sockfd)
                             mvwprintw(msg_win, 2, 2, "- Use #<card_id> to play a card");
                             mvwprintw(msg_win, 3, 2, "- #draw to draw a card");
                             wrefresh(msg_win);
+
+                            werase(err_win);
+                            box(err_win, 0, 0);
+                            mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                            wrefresh(err_win);
                         }
                         else if(command == "add"){
                             beingAdded = true;
@@ -313,8 +338,13 @@ void menu(int sockfd)
                             // Display other game messages
                             werase(msg_win);
                             box(msg_win, 0, 0);
-                            mvwprintw(msg_win, 1, 3, command.c_str());
+                            print_multiple_lines(msg_win, 1, 3, command);
                             wrefresh(msg_win);
+                            
+                            werase(err_win);
+                            box(err_win, 0, 0);
+                            mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                            wrefresh(err_win);
                         }
 
                         continue;
@@ -329,7 +359,7 @@ void menu(int sockfd)
                     {
                         werase(msg_win);
                         box(msg_win, 0, 0);
-                        mvwprintw(msg_win, 1, 4, gui["exit"].c_str());
+                        print_multiple_lines(msg_win, 1, 4, gui["exit"]);
                         wrefresh(msg_win);
                         close(sockfd);
                         goto cleanup;
@@ -337,16 +367,18 @@ void menu(int sockfd)
                     else if (command == "game"){
                         werase(msg_win);
                         box(msg_win, 0, 0);
-                        mvwprintw(msg_win, 1, 4, gui["game"].c_str());
+                        print_multiple_lines(msg_win, 1, 4, gui["game"]);
                         wrefresh(msg_win);
                         state = "GAME";
 
                         // Initialize hand_win and card_win
-                        hand_win = newwin(5, width - 50, 1, 2);
-                        card_win = newwin(5, width - 50, 7, 2);
-                        err_win = newwin(11, 35, 1, width - 48);
+                        hand_win = newwin(5, (width - 10) / 2, 1, 2);
+                        card_win = newwin(5, (width - 10) / 2, 7, 2);
+                        err_win = newwin(height - 17, (width - 10) / 2, 13, 2 + (width - 10) / 2);
                         box(hand_win, 0, 0);
                         box(card_win, 0, 0);
+                        box(err_win, 0, 0);
+                        mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
                         wrefresh(hand_win);
                         wrefresh(card_win);
                         wrefresh(err_win);
@@ -357,23 +389,48 @@ void menu(int sockfd)
                     {
                         werase(msg_win);
                         box(msg_win, 0, 0);
-                        mvwprintw(msg_win, 1, 4, gui[command].c_str());
+                        print_multiple_lines(msg_win, 1, 4, gui[command]);
                         wrefresh(msg_win);
                         transform(command.begin(), command.end(), command.begin(), ::toupper);
                         state = command;
+
+                        //werase(err_win);
+                        box(err_win, 0, 0);
+                        mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                        wrefresh(err_win);
                         continue;
+                    }
+                    else if (command[0] == '!')
+                    {
+                        if (command[1] == 'E') { // err_win
+                            string output = command.substr(2);
+                            err_win = newwin(height - 17, (width - 10) / 2, 13, 2 + (width - 10) / 2);
+                            werase(err_win);
+                            box(err_win, 0, 0);
+                            mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                            print_multiple_lines(err_win, 2, 2, output);
+                            wrefresh(err_win);
+                        } else if (command[1] == 'R') {
+                            string output = command.substr(2);
+                            room_win = newwin(12, (width - 10) / 2, 1, 2);
+                            werase(room_win);
+                            box(room_win, 0, 0);
+                            print_multiple_lines(room_win, 1, 2, output);
+                            wrefresh(room_win);
+                        } else if (command[1] == 'P') {
+                            string output = command.substr(2);
+                            player_win = newwin(12, (width - 10) / 2, 1, 2 + (width - 10) / 2);
+                            werase(player_win);
+                            box(player_win, 0, 0);
+                            print_multiple_lines(player_win, 1, 2, output);
+                            wrefresh(player_win);
+                        }
                     }
                     else
                     {
-                        if (command.empty())
+                        if (command.empty()) {
                             continue;
-                        
-
-                        room_win = newwin(12, width-10, 1, 2);
-                        werase(room_win);
-                        box(room_win, 0, 0);
-                        mvwprintw(room_win, 2, 2, command.c_str());
-                        wrefresh(room_win);
+                        }
                     }
                 }
             }
@@ -406,7 +463,8 @@ void menu(int sockfd)
                             if(currcard.first == -1){
                                 werase(err_win);
                                 box(err_win, 0, 0);
-                                mvwprintw(err_win, 1, 2, "You are the first player. Why are you drawing a card?");
+                                mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                                mvwprintw(err_win, 2, 2, "You are the first player. Why do you draw a card?");
                                 wrefresh(err_win);
                                 continue;
                             }
@@ -422,7 +480,8 @@ void menu(int sockfd)
                             if(cardpos >= hand.size()){
                                 werase(err_win);
                                 box(err_win, 0, 0);
-                                mvwprintw(err_win, 1, 2, "You don't have that many cards");
+                                mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                                mvwprintw(err_win, 2, 2, "You don't have that many cards");
                                 wrefresh(err_win);
                                 continue;
                             }
@@ -434,7 +493,8 @@ void menu(int sockfd)
                                             if(color == 0){
                                                 werase(err_win);
                                                 box(err_win, 0, 0);
-                                                mvwprintw(err_win, 1, 2, "Wrong color input");
+                                                mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                                                mvwprintw(err_win, 2, 2, "Wrong color input");
                                                 wrefresh(err_win);
                                                 continue;
                                             }
@@ -452,13 +512,15 @@ void menu(int sockfd)
                                         if(sentcard.second == ADD2 && currcard.second == ADD4){
                                             werase(err_win);
                                             box(err_win, 0, 0);
-                                            mvwprintw(err_win, 1, 2, "Current card is +4, but you played +2");
+                                            mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                                            mvwprintw(err_win, 2, 2, "Current card is +4, but you played +2");
                                             wrefresh(err_win);
                                         }
                                         else{
                                             werase(err_win);
                                             box(err_win, 0, 0);
-                                            mvwprintw(err_win, 1, 2, "You are being added cards, try to play +2 or +4");
+                                            mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                                            mvwprintw(err_win, 2, 2, "You are being added cards, try to play +2 or +4");
                                             wrefresh(err_win);
                                         }
                                         continue;
@@ -469,7 +531,8 @@ void menu(int sockfd)
                                         if(color == 0){
                                             werase(err_win);
                                             box(err_win, 0, 0);
-                                            mvwprintw(err_win, 1, 2, "Wrong color input");
+                                            mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                                            mvwprintw(err_win, 2, 2, "Wrong color input");
                                             wrefresh(err_win);
                                             continue;
                                         }
@@ -485,7 +548,8 @@ void menu(int sockfd)
                                 else{
                                     werase(err_win);
                                     box(err_win, 0, 0);
-                                    mvwprintw(err_win, 1, 2, "You cannot play this card");
+                                    mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                                    mvwprintw(err_win, 2, 2, "You cannot play this card");
                                     wrefresh(err_win);
                                     continue;
                                 }
@@ -497,7 +561,8 @@ void menu(int sockfd)
                         else{
                             werase(err_win);
                             box(err_win, 0, 0);
-                            mvwprintw(err_win, 1, 2, "Invalid command");
+                            mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                            mvwprintw(err_win, 2, 2, "Invalid command");
                             wrefresh(err_win);
                             continue;
                         }
@@ -534,6 +599,7 @@ cleanup:
     delwin(card_win);
     delwin(msg_win);
     delwin(input_win);
+    delwin(err_win);
     endwin();
 }
 
@@ -550,7 +616,6 @@ int main(int argc, char **argv)
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(15023);
     inet_pton(AF_INET, "127.0.0.1", &servaddr.sin_addr);
-    // inet_pton(AF_INET, "140.113.235.151", &servaddr.sin_addr);
 
     if(connect(sockfd, (SA *)&servaddr, sizeof(servaddr)) < 0){
         perror("Connect failed");

@@ -61,9 +61,9 @@ void Write(int fd, string s)
 string playerlist(int myself)
 {
 	bool isZero = true;
-	string list = "@╔════════════════════╦════════════════════╗\n";
-	list += "  ║player              ║status              ║\n";
-	list += "  ╠════════════════════╬════════════════════╣\n";
+	string list = "@!P╔════════════════════╦════════════════════╗\n";
+	list += "║player              ║status              ║\n";
+	list += "╠════════════════════╬════════════════════╣\n";
 	for (int i = 0; i <= maxi; i++)
 	{
 		if (isLogin[i].empty() || i == myself)
@@ -72,20 +72,20 @@ string playerlist(int myself)
 		string username = isLogin[i], status = state[i];
 		username.resize(20, ' ');
 		status.resize(20, ' ');
-		list += "  ║" + username + "║" + status + "║\n";
+		list += "║" + username + "║" + status + "║\n";
 	}
 	if (isZero)
-		list += "  ║             no player online            ║\n";
-	list += "  ╚════════════════════╩════════════════════╝\n";
+		list += "║             no player online            ║\n";
+	list += "╚════════════════════╩════════════════════╝\n";
 	return list;
 }
 
 string roomlist()
 {
 	bool isZero = true;
-	string list = "@╔════════════════════╦════════════════════╗\n";
-	list += "  ║Room                ║status              ║\n";
-	list += "  ╠════════════════════╬════════════════════╣\n";
+	string list = "@!R╔════════════════════╦════════════════════╗\n";
+	list += "║Room                ║status              ║\n";
+	list += "╠════════════════════╬════════════════════╣\n";
 	for (auto [host, room] : gameroom)
 	{
 		isZero = false;
@@ -94,11 +94,11 @@ string roomlist()
 		if(state[host] == "IN GAME") status += " [GAME]";
 		username.resize(20, ' ');
 		status.resize(20, ' ');
-		list += "  ║" + username + "║" + status + "║\n";
+		list += "║" + username + "║" + status + "║\n";
 	}
 	if (isZero)
-		list += "  ║             no room available           ║\n";
-	list += "  ╚════════════════════╩════════════════════╝\n";
+		list += "║             no room available           ║\n";
+	list += "╚════════════════════╩════════════════════╝\n";
 	return list;
 }
 
@@ -128,9 +128,9 @@ void notifyLobby(int i)
 string displayGameroom(int gameroom_id)
 {
 	bool isZero = true;
-	string list = "@╔════════════════════╦════════════════════╗\n";
-	list += "  ║Player              ║status              ║\n";
-	list += "  ╠════════════════════╬════════════════════╣\n";
+	string list = "@!R╔════════════════════╦════════════════════╗\n";
+	list += "║Player              ║status              ║\n";
+	list += "╠════════════════════╬════════════════════╣\n";
 	for (auto cli : gameroom[gameroom_id])
 	{
 		isZero = false;
@@ -138,11 +138,11 @@ string displayGameroom(int gameroom_id)
 		string status = "Waiting";
 		username.resize(20, ' ');
 		status.resize(20, ' ');
-		list += "  ║" + username + "║" + status + "║\n";
+		list += "║" + username + "║" + status + "║\n";
 	}
 	if (isZero)
-		list += "  ║             no player in room           ║\n";
-	list += "  ╚════════════════════╩════════════════════╝\n";
+		list += "║             no player in room           ║\n";
+	list += "╚════════════════════╩════════════════════╝\n";
 	return list;
 }
 
@@ -150,7 +150,7 @@ void notifyGameroom(int gameroom_id)
 {
 	for (auto cli : gameroom[gameroom_id])
 	{
-		if(state[cli] == "WAITING") Write(client[cli], "@player joined\n" + displayGameroom(gameroom_id) + "@room");
+		if(state[cli] == "WAITING") Write(client[cli], "@!Eplayer joined\n" + displayGameroom(gameroom_id) + "@room");
 	}
 }
 
@@ -187,13 +187,13 @@ void notifyResult(int i)
 string num2sym(int number){
 	string symbol;
 	if(number == SKIP){
-		symbol = "Φ ";
+		symbol = "Φ";
 	}else if(number == TURN){
 		symbol = "╰╮";
 	}else if(number == ADD2){
 		symbol = "+2";
 	}else if(number == COLOR){
-		symbol = "⊕ ";
+		symbol = "⊕";
 	}else if(number == ADD4){
 		symbol = "+4";
 	}else{
@@ -566,7 +566,7 @@ int main(int argc, char **argv)
 						}
 						else
 						{
-							Write(client[i], "@\"" + command + "\" is not a valid command\n@menu");
+							Write(client[i], "@!E\"" + command + "\" is not a valid command\n@menu");
 						}
 						continue;
 					}
@@ -591,7 +591,7 @@ int main(int argc, char **argv)
 
 							if (username.empty() || password.empty())
 							{
-								Write(client[i], "@username or password empty@register");
+								Write(client[i], "@!Eusername or password empty@register");
 								continue;
 							}
 
@@ -604,7 +604,7 @@ int main(int argc, char **argv)
 								if (username == susername)
 								{
 									isNewUser = false;
-									Write(client[i], "@username existed@register");
+									Write(client[i], "@!Eusername existed@register");
 									break;
 								}
 							}
@@ -616,7 +616,7 @@ int main(int argc, char **argv)
 							}
 
 							fuserout << username << " " << password << endl;
-							Write(client[i], "@register succeed@menu");
+							Write(client[i], "@!Eregister succeed@menu");
 							state[i] = "MENU";
 
 							fuserin.close();
@@ -649,7 +649,7 @@ int main(int argc, char **argv)
 								if (username == isLogin[j])
 								{
 									isUserOnline = true;
-									Write(client[i], "@this account is already logged in@login");
+									Write(client[i], "@!Ethis account is already logged in@login");
 									break;
 								}
 							}
@@ -668,19 +668,21 @@ int main(int argc, char **argv)
 									{
 										state[i] = "LOBBY";
 										isLogin[i] = username;
-										Write(client[i], "@login successful\n" + roomlist() + playerlist(i) + "@lobby");
+										string playerlist_str = playerlist(i);
+										// playerlist_str.erase(playerlist_str.begin()); 
+										Write(client[i], "@!Elogin successful\n" + roomlist() + playerlist_str + "@lobby");
 										notifyLobby(i);
 									}
 									else
 									{
-										Write(client[i], "@password wrong@login");
+										Write(client[i], "@!Epassword wrong@login");
 									}
 									break;
 								}
 							}
 							if (!isUserInData)
 							{
-								Write(client[i], "@username not exist@login");
+								Write(client[i], "@!Eusername not exist@login");
 							}
 						}
 						continue;
@@ -694,7 +696,7 @@ int main(int argc, char **argv)
 							gameroom[i].push_back({i});
 							gamechat[i].push_back({""});
 							inRoom[i] = i;
-							Write(client[i], "@gameroom create successful\n" + displayGameroom(i) + "@room");
+							Write(client[i], "@!Egameroom create successful\n" + displayGameroom(i) + "@room");
 							notifyLobby(i);
 						}
 						else if (command.find("join") != string::npos)
@@ -715,7 +717,7 @@ int main(int argc, char **argv)
 										}
 									}
 									if(!isRoomFind){
-										Write(client[i], "@gameroom is not found!" + roomlist() + playerlist(i) + "@lobby");
+										Write(client[i], "@!Egameroom is not found!" + roomlist() + playerlist(i) + "@lobby");
 										continue;
 									}
 								}
@@ -723,13 +725,13 @@ int main(int argc, char **argv)
 
 							if (gameroom.find(roomid) == gameroom.end())
 							{
-								Write(client[i], "@gameroom is not exist!" + roomlist() + playerlist(i) + "@lobby");
+								Write(client[i], "@!Egameroom is not exist!" + roomlist() + playerlist(i) + "@lobby");
 							}
 							else
 							{
 								if (gameroom[roomid].size() == 4)
 								{
-									Write(client[i], "@gameroom is full!" + roomlist() + playerlist(i) + "@lobby");
+									Write(client[i], "@!Egameroom is full!" + roomlist() + playerlist(i) + "@lobby");
 								}
 								else
 								{
@@ -745,7 +747,7 @@ int main(int argc, char **argv)
 						else if (command == "logout")
 						{
 							isLogin[i].clear();
-							Write(client[i], "@logout successful\n@menu");
+							Write(client[i], "@!Elogout successful\n@menu");
 							state[i] = "MENU";
 							notifyLobby(i);
 						}
@@ -756,7 +758,7 @@ int main(int argc, char **argv)
 						}
 						else
 						{
-							Write(client[i], "@\"" + command + "\" is not a valid command\n" + roomlist() + playerlist(i) + "@lobby");
+							Write(client[i], "@!E\"" + command + "\" is not a valid command\n" + roomlist() + playerlist(i) + "@lobby");
 						}
 						continue;
 					}
@@ -791,12 +793,12 @@ int main(int argc, char **argv)
 						{
 							if (i != inRoom[i])
 							{
-								Write(client[i], "@you are not the host!\n" + displayGameroom(inRoom[i]) + "@room");
+								Write(client[i], "@!Eyou are not the host!\n" + displayGameroom(inRoom[i]) + "@room");
 							}
 							else
 							{
 								if(gameroom[i].size() < 4){
-									Write(client[i], "@wait for more players to start...\n" + displayGameroom(inRoom[i]) + "@room");
+									Write(client[i], "@!Ewait for more players to start...\n" + displayGameroom(inRoom[i]) + "@room");
 								}else{
 									for(auto cli : gameroom[i]){
 										state[cli] = "IN GAME";
@@ -816,7 +818,7 @@ int main(int argc, char **argv)
 						}
 						else
 						{
-							Write(client[i], "@\"" + command + "\" is not a valid command\n" + displayGameroom(inRoom[i]) + "@room");
+							Write(client[i], "@!E\"" + command + "\" is not a valid command\n" + displayGameroom(inRoom[i]) + "@room");
 						}
 						continue;
 					}
@@ -844,7 +846,7 @@ int main(int argc, char **argv)
 						}
 						else
 						{
-							Write(client[i], "@\"" + command + "\" is not a valid command\n" + roomlist() + playerlist(i) + "@lobby");
+							Write(client[i], "@!E\"" + command + "\" is not a valid command\n" + roomlist() + playerlist(i) + "@lobby");
 						}
 						continue;
 					}
