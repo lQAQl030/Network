@@ -82,36 +82,36 @@ int main()
         // clear the window with black color
         window.clear(sf::Color::Black);
 
-        // // define the level with an array of tile indices
-        // const int level[] =
-        // {
-        //     0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-        //     0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0,
-        //     1, 1, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3,
-        //     0, 1, 0, 0, 2, 0, 3, 3, 3, 0, 1, 1, 1, 0, 0, 0,
-        //     0, 1, 1, 0, 3, 3, 3, 0, 0, 0, 1, 1, 1, 2, 0, 0,
-        //     0, 0, 1, 0, 3, 0, 2, 2, 0, 0, 1, 1, 1, 1, 2, 0,
-        //     2, 0, 1, 0, 3, 0, 2, 2, 2, 0, 1, 1, 1, 1, 1, 1,
-        //     0, 0, 1, 0, 3, 2, 2, 2, 0, 0, 0, 0, 1, 1, 1, 1,
-        // };
+        // define the level with an array of tile indices
+        const int level[] =
+        {
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+            0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 2, 0, 0, 0, 0,
+            1, 1, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, 3, 3, 3, 3,
+            0, 1, 0, 0, 2, 0, 3, 3, 3, 0, 1, 1, 1, 0, 0, 0,
+            0, 1, 1, 0, 3, 3, 3, 0, 0, 0, 1, 1, 1, 2, 0, 0,
+            0, 0, 1, 0, 3, 0, 2, 2, 0, 0, 1, 1, 1, 1, 2, 0,
+            2, 0, 1, 0, 3, 0, 2, 2, 2, 0, 1, 1, 1, 1, 1, 1,
+            0, 0, 1, 0, 3, 2, 2, 2, 0, 0, 0, 0, 1, 1, 1, 1,
+        };
 
-        // // create the tilemap from the level definition
-        // TileMap map;
-        // if (!map.load("840pxUNO.png", sf::Vector2u(60, 90), level, 16, 8))
-        //     return -1;
-        // window.draw(map);
+        // create the tilemap from the level definition
+        TileMap map;
+        if (!map.load("560pxUNO.png", sf::Vector2u(40, 60), level, 24, 4))
+            return -1;
+        window.draw(map);
         // draw everything here...
         // 30px gap
-        sf::Texture texture;
-        texture.setSmooth(true);
-        if (!texture.loadFromFile("draw.png", sf::IntRect(0, 0, 256, 256)));
-        {
-            // error...
-        }
-        sf::Sprite sprite;
-        sprite.setTexture(texture);
-        sprite.setScale(sf::Vector2f(0.4, 0.4));
-        window.draw(sprite);
+        // sf::Texture texture;
+        // texture.setSmooth(true);
+        // if (!texture.loadFromFile("draw.png", sf::IntRect(0, 0, 256, 256)));
+        // {
+        //     // error...
+        // }
+        // sf::Sprite sprite;
+        // sprite.setTexture(texture);
+        // sprite.setScale(sf::Vector2f(0.4, 0.4));
+        // window.draw(sprite);
 
         // sf::Text text;
 

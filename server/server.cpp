@@ -61,7 +61,7 @@ void Write(int fd, string s)
 string playerlist(int myself)
 {
 	bool isZero = true;
-	string list = "@╔════════════════════╦════════════════════╗\n";
+	string list = "@playerlist@╔════════════════════╦════════════════════╗\n";
 	list += "║player              ║status              ║\n";
 	list += "╠════════════════════╬════════════════════╣\n";
 	for (int i = 0; i <= maxi; i++)
@@ -83,7 +83,7 @@ string playerlist(int myself)
 string roomlist()
 {
 	bool isZero = true;
-	string list = "@╔════════════════════╦════════════════════╗\n";
+	string list = "@roomlist@╔════════════════════╦════════════════════╗\n";
 	list += "║Room                ║status              ║\n";
 	list += "╠════════════════════╬════════════════════╣\n";
 	for (auto [host, room] : gameroom)
@@ -128,7 +128,7 @@ void notifyLobby(int i)
 string displayGameroom(int gameroom_id)
 {
 	bool isZero = true;
-	string list = "@╔════════════════════╦════════════════════╗\n";
+	string list = "@gameroom@╔════════════════════╦════════════════════╗\n";
 	list += "║Player              ║status              ║\n";
 	list += "╠════════════════════╬════════════════════╣\n";
 	for (auto cli : gameroom[gameroom_id])
@@ -258,6 +258,28 @@ string gameInfo(int host, vector<pair<int,int>> deck, vector<pair<int,int>> tabl
 	return info;
 }
 
+string gameInfoClientGUI(vector<vector<pair<int,int>>> hands){
+	string info = "@handscardscnt@";
+	for(auto hand : hands){
+		info += to_string(hand.size()) + " ";
+	}
+	return info;
+}
+
+string gameInfoGUI(vector<pair<int,int>> deck, vector<pair<int,int>> table, vector<vector<pair<int,int>>> hands, int time_elapsed){
+	string info = "@deck@";
+	for(auto [color, number] : deck) info += to_string(color) + " " + to_string(number) + " ";
+	info += "@table@";
+	for(auto [color, number] : table) info += to_string(color) + " " + to_string(number) + " ";
+	info += "@hands";
+	for(auto hand : hands){
+		info += "@";
+		for(auto [color, number] : hand) info += to_string(color) + " " + to_string(number) + " ";
+	}
+	info += "@elapsedtime@" + to_string(time_elapsed);
+	return info;
+}
+
 void *gamethread(void *arg){
 	int host = *((int*) arg);
 	delete (int*)arg;
@@ -273,7 +295,7 @@ void *gamethread(void *arg){
 	vector<vector<pair<int,int>>> hands(4);
 	vector<pair<int,int>> table;
 	vector<pair<int,int>> deck;
-	pair<int,int> currcard;
+	pair<int,int> currcard = {-1, -1};
 	bool direction = true;
 	bool statusUpdate = false;
 	int addCardBuff = 0;
@@ -291,6 +313,12 @@ void *gamethread(void *arg){
 	}
 	shuffle(deck.begin(), deck.end(), rng);
 
+	// deliver names
+	string name_str = "@names@";
+	for(int player = 0 ; player < 4 ; player++){
+		name_str += isLogin[gameroom[host][player]] + " ";
+	}
+
 	// initilaize hands
 	for(int player = 0 ; player < 4 ; player++){
 		string hand_str = "@hand@";
@@ -299,12 +327,12 @@ void *gamethread(void *arg){
 			hand_str += to_string(deck.back().first) + " " + to_string(deck.back().second) + " ";
 			deck.pop_back();
 		}
-		Write(client[gameroom[host][player]], hand_str);
+		Write(client[gameroom[host][player]], hand_str + name_str);
 	}
 
 	// init msg
 	for(int player = 0 ; player < 4 ; player++){
-		Write(client[gameroom[host][player]], "@card@-1 -1" + gameInfoClient(host, table, hands) + "@disp");
+		Write(client[gameroom[host][player]], gameInfoClientGUI(hands) + "@card@-1 -1" + gameInfoClient(host, table, hands) + "@disp");
 	}
 	Write(client[gameroom[host][0]], "%@turn");
 
@@ -352,10 +380,18 @@ void *gamethread(void *arg){
 
 								// end sequence
 								if(hands[player].empty()){
-									string info = gameInfo(host, deck, table, hands, currcard, t.get_tick());
+									int time = t.get_tick();
+									string info = gameInfo(host, deck, table, hands, currcard, time);
 									info += "Winner:\n" + isLogin[gameroom[host][player]] + "\n";
+									string info_gui = gameInfoGUI(deck, table, hands, time);
+									info_gui += "@names@";
+									for(int player = 0 ; player < 4 ; player++){
+										info_gui += isLogin[gameroom[host][player]] + " ";
+									}
+									info_gui += "@winner@"+ isLogin[gameroom[host][player]];
 
 									for(auto cli : gameroom[host]){
+										Write(client[cli], info_gui);
 										Write(client[cli], info + "@win");
 									}
 
@@ -394,10 +430,18 @@ void *gamethread(void *arg){
 					}
 
 					if(command == "leave"){
-						string info = gameInfo(host, deck, table, hands, currcard, t.get_tick());
+						int time = t.get_tick();
+						string info = gameInfo(host, deck, table, hands, currcard, time);
 						info += "Player Quit: " + isLogin[gameroom[host][player]] + "\n";
+						string info_gui = gameInfoGUI(deck, table, hands, time);
+						info_gui += "@names@";
+						for(int player = 0 ; player < 4 ; player++){
+							info_gui += isLogin[gameroom[host][player]] + " ";
+						}
+						info_gui += "@quitter@" + isLogin[gameroom[host][player]];
 
 						for(auto cli : gameroom[host]){
+							Write(client[cli], info_gui);
 							Write(client[cli], info + "@win");
 						}
 
@@ -418,16 +462,22 @@ void *gamethread(void *arg){
 
 				// game
 				statusUpdate = false;
-				string historyChat = "@";
+				string historyChat = "@historychat@";
 				string info = gameInfoClient(host, table, hands);
+				string info_gui = gameInfoClientGUI(hands);
+				info_gui += "@currentplayer@" + to_string(currentPlayer);
+				info_gui += "@direction@" + to_string((direction) ?1 :0);
+				int chat_cnt = chatroom.size() - 16;
+				if(chat_cnt < 0) chat_cnt = 0;
 				for(auto chat : chatroom){
+					if(chat_cnt-- > 0) continue;
 					historyChat += chat + "\n";
 				}
 				for(int player = 0 ; player < 4 ; player++){
 					Write(client[gameroom[host][player]], "%@card@" + to_string(currcard.first) + " " + to_string(currcard.second));
 				}
 				for(int player = 0 ; player < 4 ; player++){
-					Write(client[gameroom[host][player]], historyChat + info + "@disp");
+					Write(client[gameroom[host][player]], historyChat + info_gui + info + "@disp");
 				}
 				string sentCurrent = "%@turn";
 				if(addCardBuff){
@@ -591,7 +641,7 @@ int main(int argc, char **argv)
 
 							if (username.empty() || password.empty())
 							{
-								Write(client[i], "@username or password empty@register");
+								Write(client[i], "@fieldempty@username or password empty@register");
 								continue;
 							}
 
@@ -604,7 +654,7 @@ int main(int argc, char **argv)
 								if (username == susername)
 								{
 									isNewUser = false;
-									Write(client[i], "@username existed@register");
+									Write(client[i], "@userexist@username existed@register");
 									break;
 								}
 							}
@@ -649,7 +699,7 @@ int main(int argc, char **argv)
 								if (username == isLogin[j])
 								{
 									isUserOnline = true;
-									Write(client[i], "@this account is already logged in@login");
+									Write(client[i], "@userlogged@this account is already logged in@login");
 									break;
 								}
 							}
@@ -673,14 +723,14 @@ int main(int argc, char **argv)
 									}
 									else
 									{
-										Write(client[i], "@password wrong@login");
+										Write(client[i], "@wrongpwd@password wrong@login");
 									}
 									break;
 								}
 							}
 							if (!isUserInData)
 							{
-								Write(client[i], "@username not exist@login");
+								Write(client[i], "@voiduser@username not exist@login");
 							}
 						}
 						continue;
