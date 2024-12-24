@@ -224,16 +224,16 @@ string gameInfoClient(int host, vector<pair<int,int>> table, vector<vector<pair<
 }
 
 string gameInfo(int host, vector<pair<int,int>> deck, vector<pair<int,int>> table, vector<vector<pair<int,int>>> hands, pair<int,int> currcard, int time_elapsed){
-	string info = "@==========STATUS=========\n";
-	info += "DECK:\n";
+	string info = "@!STATUS\n";
+	info += "Deck:\n";
 	for(auto card : deck){
-		info += "\x1b[1;" + to_string(card.first+30) + "m" + num2sym(card.second) + "\x1b[0m ";
+		info += "[" + to_string(card.first) + "m" + num2sym(card.second) + "] ";
 	}
 	info += "\n";
 
 	info += "Table:\n";
 	for(auto card : table){
-		info += "\x1b[1;" + to_string(card.first+30) + "m" + num2sym(card.second) + "\x1b[0m ";
+		info += "[" + to_string(card.first) + "m" + num2sym(card.second) + "] ";
 	}
 	info += "\n";
 
@@ -241,19 +241,19 @@ string gameInfo(int host, vector<pair<int,int>> deck, vector<pair<int,int>> tabl
 	for(int player = 0 ; player < 4 ; player++){
 		info += "(" + isLogin[gameroom[host][player]] + "): ";
 		for(auto card : hands[player]){
-			info += "\x1b[1;" + to_string(card.first+30) + "m" + num2sym(card.second) + "\x1b[0m ";
+			info += "[" + to_string(card.first) + "m" + num2sym(card.second) + "] ";
 		}
 		info += "\n";
 	}
 	
 
 	info += "Current Card:\n";
-	info += "\x1b[1;" + to_string(currcard.first+30) + "m" + num2sym(currcard.second) + "\x1b[0m\n";
+	info += "[" + to_string(currcard.first) + "m" + num2sym(currcard.second) + "]\n";
 
 	info += "Elapsed time:\n";
-	info += to_string(time_elapsed) + "\n";
+	info += to_string(time_elapsed) + "\n\n";
 	
-	info += "=========================\n";
+	info += "SYSTEM MESSAGE\n";
 
 	return info;
 }
@@ -669,7 +669,6 @@ int main(int argc, char **argv)
 										state[i] = "LOBBY";
 										isLogin[i] = username;
 										string playerlist_str = playerlist(i);
-										// playerlist_str.erase(playerlist_str.begin()); 
 										Write(client[i], "@!Elogin successful\n" + roomlist() + playerlist_str + "@lobby");
 										notifyLobby(i);
 									}

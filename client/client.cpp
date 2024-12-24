@@ -81,6 +81,10 @@ void print_multiple_lines(WINDOW *curr_win, int start_row, int start_column, str
             buffer = "";
         }
     }
+    if (!buffer.empty()) {
+        mvwprintw(curr_win, start_row, start_column, "%s", buffer.c_str());
+    }
+
 }
 
 void show_hand(WINDOW *hand_win, vector<pair<int,int>> &hand){
@@ -112,8 +116,10 @@ void show_hand(WINDOW *hand_win, vector<pair<int,int>> &hand){
         }
         if (card == "╰╮ ") {
             x += 3;
+        } else if (card == "⊕ ") {
+            x += 3;
         } else {
-             x += card.length();
+            x += card.length();
         }
        
     }
@@ -154,6 +160,7 @@ void menu(int sockfd)
     noecho();             // Don't echo() while we do getch
     keypad(stdscr, TRUE); // Enable function keys
     curs_set(1);          // Show cursor
+    mousemask(0, NULL);   // disable mouse events
 
     // Initialize colors
     if (has_colors() == FALSE)
@@ -181,6 +188,7 @@ void menu(int sockfd)
     WINDOW *player_win;
     WINDOW *input_win = newwin(3, width - 10, height - 4, 2);
     WINDOW *err_win = newwin(height - 17, (width - 10) / 2, 13, 2 + (width - 10) / 2);
+    WINDOW *res_win;
 
     // Draw borders
     box(msg_win, 0, 0);
@@ -302,7 +310,9 @@ void menu(int sockfd)
                             box(msg_win, 0, 0);
                             mvwprintw(msg_win, 1, 2, "It's your turn now");
                             mvwprintw(msg_win, 2, 2, "- Use #<card_id> to play a card");
-                            mvwprintw(msg_win, 3, 2, "- #draw to draw a card");
+                            mvwprintw(msg_win, 3, 2, "- Use #<card_id> <color_id> for custom-colored cards");
+                            mvwprintw(msg_win, 4, 2, "- #draw to draw a card");
+                            mvwprintw(msg_win, 5, 2, "- leave to quit the game");
                             wrefresh(msg_win);
 
                             werase(err_win);
@@ -315,6 +325,86 @@ void menu(int sockfd)
                         }
                         else if(command == "disp"){
                             display(hand_win, card_win, hand, currcard);
+                        } else if (command[0] == '!') {
+                            werase(hand_win);
+                            werase(card_win);
+                            werase(err_win);
+                            wrefresh(hand_win);
+                            wrefresh(card_win);
+                            wrefresh(err_win);
+                            int res_win_width = (width - 10) / 2;
+                            res_win = newwin(height - 5, res_win_width, 1, 2 + res_win_width);
+                            box(res_win, 0, 0);
+                            wrefresh(res_win);
+
+                            int len = command.size();
+                            string buffer;
+                            int line = 1;
+                            int col = 2;
+
+                            auto printBuffer = [&](WINDOW* win, std::string& buf) {
+                                if (!buf.empty()) {
+                                    mvwprintw(win, line, col, "%s", buf.c_str());
+                                    wrefresh(win);
+                                    col += buf.size();
+                                    if (col >= res_win_width - 2) {
+                                        col = 2;
+                                        ++line;
+                                    }
+                                    buf.clear();
+                                }
+                            };
+
+                            for (int i = 2; i < len; ++i) {
+                                char c = command[i];
+                                if (c == '\n') {
+                                    printBuffer(res_win, buffer);
+                                    line++;
+                                    col = 2;
+                                    continue;
+                                }
+                                if (c == '[') {
+                                    printBuffer(res_win, buffer);
+
+                                    size_t closePos = command.find(']', i + 1);
+                                    if (closePos == string::npos) {
+                                        break;
+                                    }
+                                    std::string cardSub = command.substr(i + 1, closePos - (i + 1));
+                                    size_t mPos = cardSub.find('m');
+                                    if (mPos == std::string::npos) {
+                                        i = closePos;
+                                        continue;
+                                    }
+
+                                    string color_str = cardSub.substr(0, mPos);
+                                    string symbol_str = cardSub.substr(mPos + 1);
+                                    int colorVal = stoi(color_str);
+
+                                    wattron(res_win, COLOR_PAIR(colorVal));
+                                    mvwprintw(res_win, line, col, "%s", symbol_str.c_str());
+                                    wattroff(res_win, COLOR_PAIR(colorVal));
+                                    wrefresh(res_win);
+                                    
+                                    if (symbol_str == "╰╮") {
+                                        col += 2;
+                                    } else if (symbol_str == "⊕") {
+                                        col += 2;
+                                    } else {
+                                        col += symbol_str.size();
+                                    }
+                                    if (col >= res_win_width - 2) {
+                                        col = 2;
+                                        ++line;
+                                    }
+                                    i = closePos; 
+                                }
+                                else {
+                                    buffer += c;
+                                }
+                            }
+                            printBuffer(res_win, buffer);
+                            wrefresh(res_win);
                         }
                         else{
                             if(command.empty()) continue;
@@ -385,21 +475,6 @@ void menu(int sockfd)
 
                         continue;
                     }
-                    else if (gui.find(command) != gui.end())
-                    {
-                        werase(msg_win);
-                        box(msg_win, 0, 0);
-                        print_multiple_lines(msg_win, 1, 4, gui[command]);
-                        wrefresh(msg_win);
-                        transform(command.begin(), command.end(), command.begin(), ::toupper);
-                        state = command;
-
-                        //werase(err_win);
-                        box(err_win, 0, 0);
-                        mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
-                        wrefresh(err_win);
-                        continue;
-                    }
                     else if (command[0] == '!')
                     {
                         if (command[1] == 'E') { // err_win
@@ -410,14 +485,14 @@ void menu(int sockfd)
                             mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
                             print_multiple_lines(err_win, 2, 2, output);
                             wrefresh(err_win);
-                        } else if (command[1] == 'R') {
+                        } else if (command[1] == 'R') { // room_win
                             string output = command.substr(2);
                             room_win = newwin(12, (width - 10) / 2, 1, 2);
                             werase(room_win);
                             box(room_win, 0, 0);
                             print_multiple_lines(room_win, 1, 2, output);
                             wrefresh(room_win);
-                        } else if (command[1] == 'P') {
+                        } else if (command[1] == 'P') { // player_win
                             string output = command.substr(2);
                             player_win = newwin(12, (width - 10) / 2, 1, 2 + (width - 10) / 2);
                             werase(player_win);
@@ -425,6 +500,20 @@ void menu(int sockfd)
                             print_multiple_lines(player_win, 1, 2, output);
                             wrefresh(player_win);
                         }
+                    }
+                    else if (gui.find(command) != gui.end())
+                    {
+                        werase(msg_win);
+                        box(msg_win, 0, 0);
+                        print_multiple_lines(msg_win, 1, 4, gui[command]);
+                        wrefresh(msg_win);
+                        transform(command.begin(), command.end(), command.begin(), ::toupper);
+                        state = command;
+
+                        box(err_win, 0, 0);
+                        mvwprintw(err_win, 1, 2, "SYSTEM MESSAGE");
+                        wrefresh(err_win);
+                        continue;
                     }
                     else
                     {
@@ -443,10 +532,7 @@ void menu(int sockfd)
         box(input_win, 0, 0);
         mvwprintw(input_win, 1, 2, "Input: %s", input_buffer.c_str());
         wrefresh(input_win);
-
-        echo();
         int ch = wgetch(input_win);
-        noecho();
         
         if (ch != ERR) {
             if (ch == '\n' || ch == '\r') {
@@ -455,7 +541,6 @@ void menu(int sockfd)
                     input_buffer.clear();
                     if (state == "GAME" && myTurn && sendline[0] == '#'){
                         string cardcommand = sendline.substr(1, sendline.size()-1);
-                        // Remove newline character
                         if(cardcommand.find('\n') != string::npos){
                             cardcommand.erase(cardcommand.find('\n'));
                         }
@@ -583,6 +668,8 @@ void menu(int sockfd)
                 box(input_win, 0, 0);
                 mvwprintw(input_win, 1, 2, "Input: %s", input_buffer.c_str());
                 wrefresh(input_win);
+            } else if (ch < 32 || ch > 126) {
+                continue;
             } else {
                 input_buffer += static_cast<char>(ch);
                 werase(input_win);
@@ -600,6 +687,7 @@ cleanup:
     delwin(msg_win);
     delwin(input_win);
     delwin(err_win);
+    delwin(res_win);
     endwin();
 }
 
