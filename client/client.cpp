@@ -19,6 +19,99 @@ using namespace std;
 
 string input_buffer = "";
 
+const std::string UNO_ART = R"(
+          _____                    _____                   _______
+         /\    \                  /\    \                 /::\    \
+        /::\____\                /::\____\               /::::\    \
+       /:::/    /               /::::|   |              /::::::\    \
+      /:::/    /               /:::::|   |             /::::::::\    \
+     /:::/    /               /::::::|   |            /:::/~~\:::\    \
+    /:::/    /               /:::/|::|   |           /:::/    \:::\    \
+   /:::/    /               /:::/ |::|   |          /:::/    / \:::\    \
+  /:::/    /      _____    /:::/  |::|   | _____   /:::/____/   \:::\____\
+ /:::/____/      /\    \  /:::/   |::|   |/\    \ |:::|    |     |:::|    |
+|:::|    /      /::\____\/:: /    |::|   /::\____\|:::|____|     |:::|    |
+|:::|____\     /:::/    /\::/    /|::|  /:::/    / \:::\    \   /:::/    /
+ \:::\    \   /:::/    /  \/____/ |::| /:::/    /   \:::\    \ /:::/    /
+  \:::\    \ /:::/    /           |::|/:::/    /     \:::\    /:::/    /
+   \:::\    /:::/    /            |::::::/    /       \:::\__/:::/    /
+    \:::\__/:::/    /             |:::::/    /         \::::::::/    /
+     \::::::::/    /              |::::/    /           \::::::/    /
+      \::::::/    /               /:::/    /             \::::/    /
+       \::::/    /               /:::/    /               \::/____/
+        \::/____/                \::/    /                 ~~
+         ~~                       \/____/
+
+)";
+
+
+int intro_window(WINDOW* win, int height, int width) {
+    werase(win);
+    box(win, 0, 0);
+    wrefresh(win);
+
+    int art_row = 2;
+    int max_line_length = 0;
+    stringstream ss_temp(UNO_ART);
+    string temp_line;
+    while(getline(ss_temp, temp_line)) {
+        if((int)temp_line.size() > max_line_length) {
+            max_line_length = temp_line.size();
+        }
+    }
+    int art_col = (width - max_line_length) / 2;
+    int r = art_row;
+
+    stringstream ss(UNO_ART);
+    string line;
+    while (getline(ss, line)) {
+        mvwprintw(win, r, art_col, "%s", line.c_str());
+        ++r;
+    }
+
+    vector<string> choices = {"Start", "Leave"};
+    int choice_idx = 0;
+
+    keypad(win, TRUE);
+    wrefresh(win);
+
+    int startMenuRow = r + 1;
+
+    while (true) {
+        for (int i = 0; i < (int)choices.size(); i++) {
+            if (i == choice_idx) {
+                wattron(win, A_REVERSE);
+                mvwprintw(win, startMenuRow + i, (width - (int)choices[i].size()) / 2, "%s", choices[i].c_str());
+                wattroff(win, A_REVERSE);
+            } else {
+                mvwprintw(win, startMenuRow + i, (width - (int)choices[i].size()) / 2, "%s", choices[i].c_str());
+            }
+        }
+        wrefresh(win);
+        int ch = wgetch(win);
+        switch (ch) {
+            case KEY_UP:
+                choice_idx--;
+                if (choice_idx < 0) {
+                    choice_idx = choices.size() - 1;
+                }
+                break;
+            case KEY_DOWN:
+                choice_idx++;
+                if (choice_idx >= (int)choices.size()) {
+                    choice_idx = 0;
+                }
+                break;
+            case 10:
+                return choice_idx;
+            default:
+                break;
+        }
+    }
+    return choice_idx;
+}
+
+
 bool isNumber(const string &str)
 {
     return str.find_first_not_of("0123456789") == string::npos;
@@ -154,8 +247,6 @@ void display(WINDOW *hand_win, WINDOW *card_win, vector<pair<int,int>> &hand, pa
 
 void menu(int sockfd)
 {
-    // Initialize ncurses
-    initscr();            // Start curses mode
     cbreak();             // Disable line buffering
     noecho();             // Don't echo() while we do getch
     keypad(stdscr, TRUE); // Enable function keys
@@ -181,14 +272,14 @@ void menu(int sockfd)
     int height, width;
     getmaxyx(stdscr, height, width);
 
-    WINDOW *hand_win;
-    WINDOW *card_win;
+    WINDOW *hand_win = nullptr;
+    WINDOW *card_win = nullptr;
     WINDOW *msg_win = newwin(height - 17, (width - 10) / 2, 13, 2);
-    WINDOW *room_win;
-    WINDOW *player_win;
+    WINDOW *room_win = nullptr;
+    WINDOW *player_win = nullptr;
     WINDOW *input_win = newwin(3, width - 10, height - 4, 2);
     WINDOW *err_win = newwin(height - 17, (width - 10) / 2, 13, 2 + (width - 10) / 2);
-    WINDOW *res_win;
+    WINDOW *res_win = nullptr;
 
     // Draw borders
     box(msg_win, 0, 0);
@@ -342,7 +433,7 @@ void menu(int sockfd)
                             int line = 1;
                             int col = 2;
 
-                            auto printBuffer = [&](WINDOW* win, std::string& buf) {
+                            auto printBuffer = [&](WINDOW* win, string& buf) {
                                 if (!buf.empty()) {
                                     mvwprintw(win, line, col, "%s", buf.c_str());
                                     wrefresh(win);
@@ -355,7 +446,7 @@ void menu(int sockfd)
                                 }
                             };
 
-                            for (int i = 2; i < len; ++i) {
+                            for (int i = 1; i < len; ++i) {
                                 char c = command[i];
                                 if (c == '\n') {
                                     printBuffer(res_win, buffer);
@@ -370,9 +461,9 @@ void menu(int sockfd)
                                     if (closePos == string::npos) {
                                         break;
                                     }
-                                    std::string cardSub = command.substr(i + 1, closePos - (i + 1));
+                                    string cardSub = command.substr(i + 1, closePos - (i + 1));
                                     size_t mPos = cardSub.find('m');
-                                    if (mPos == std::string::npos) {
+                                    if (mPos == string::npos) {
                                         i = closePos;
                                         continue;
                                     }
@@ -682,12 +773,14 @@ void menu(int sockfd)
 
 cleanup:
     // Cleanup ncurses
-    delwin(hand_win);
-    delwin(card_win);
-    delwin(msg_win);
-    delwin(input_win);
-    delwin(err_win);
-    delwin(res_win);
+    if (hand_win)   { delwin(hand_win);   hand_win = nullptr; }
+    if (card_win)   { delwin(card_win);   card_win = nullptr; }
+    if (msg_win)    { delwin(msg_win);    msg_win = nullptr; }
+    if (input_win)  { delwin(input_win);  input_win = nullptr; }
+    if (err_win)    { delwin(err_win);    err_win = nullptr; }
+    if (res_win)    { delwin(res_win);    res_win = nullptr; }
+    if (room_win)   { delwin(room_win);   room_win = nullptr; }
+    if (player_win) { delwin(player_win); player_win = nullptr; }
     endwin();
 }
 
@@ -710,8 +803,24 @@ int main(int argc, char **argv)
         exit(1);
     }
 
-    menu(sockfd); /* Execute main function */
+    // Initialize ncurses
+    initscr();            // Start curses mode
+    curs_set(0);
 
+    int height, width;
+    getmaxyx(stdscr, height, width);
+    int selected = intro_window(stdscr, height, width);
+    if (selected == 0) {
+        menu(sockfd); /* Execute main function */
+    } else {
+        curs_set(0);
+        endwin();
+        close(sockfd);
+        exit(0);
+    }
+    
+    curs_set(0);
+    endwin();
     close(sockfd);
     exit(0);
 }
